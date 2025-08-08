@@ -99,6 +99,24 @@ try {
     console.error('Error setting up routes:', error);
 }
 
+// Custom middleware to handle serverless file paths
+app.use((req, res, next) => {
+    // Handle file access in serverless environment
+    if (req.url.startsWith('/uploads/') && process.env.NODE_ENV === 'production') {
+        // In serverless, files might be in /tmp or a cloud storage
+        console.log('Serverless file access request:', req.url);
+        
+        // For now, we'll just redirect to the temporary storage
+        // In production, this should be replaced with cloud storage URL construction
+        const filePath = req.url.replace('/uploads/', '/tmp/');
+        console.log('Mapped to:', filePath);
+        
+        // Here you would implement the logic to serve from cloud storage
+        // For demo purposes, we'll just continue and let the static middleware try
+    }
+    next();
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
@@ -112,10 +130,12 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-// For local development
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+// Only start the server if running locally (not in serverless environment)
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+    });
+}
 
-// For Vercel deployment
+// For Vercel serverless deployment
 module.exports = app;

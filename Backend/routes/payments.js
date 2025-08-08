@@ -1,55 +1,22 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
 const db = require('../database/connection');
 const authenticateToken = require('../middleware/auth');
+const { upload, processUpload } = require('../utils/fileUpload');
 const router = express.Router();
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/receipts/');
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'receipt-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
-const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|pdf/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        
-        if (mimetype && extname) {
-            return cb(null, true);
-        } else {
-            cb(new Error('Only JPEG, PNG, and PDF files are allowed'));
-        }
-    }
-});
-
-// Create directory if it doesn't exist
-const fs = require('fs');
-const uploadDir = 'uploads/receipts/';
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
 
 // Submit payment
 router.post('/', authenticateToken, upload.single('receipt'), (req, res) => {
     const { violation_id, payment_amount } = req.body;
-    const receipt_file = req.file ? req.file.filename : null;
+    
+    // Process the uploaded file (works in both serverless and regular environments)
+    const receipt_file = processUpload(req);
     
     if (!receipt_file) {
         return res.status(400).json({ message: 'Receipt file is required' });
     }
     
     const query = 'INSERT INTO Payments (violation_id, payment_amount, receipt_file) VALUES (?, ?, ?)';
-      db.query(query, [violation_id, payment_amount, receipt_file], (err, result) => {
+    db.query(query, [violation_id, payment_amount, receipt_file], (err, result) => {
         if (err) {
             return res.status(500).json({ message: 'Database error', error: err });
         }
